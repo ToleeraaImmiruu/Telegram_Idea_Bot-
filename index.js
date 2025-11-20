@@ -1,59 +1,62 @@
-import TelegramBot from "node-telegram-bot-api";
+require("dotenv").config();
+const TelegramBot = require("node-telegram-bot-api");
+const express = require("express");
 
-// Use environment variables (for Render)
+const app = express();
+
+// Render port requirement
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("🚀 Telegram Bot is running on Render!");
+});
+
+app.listen(PORT, () => {
+  console.log(`🌍 Web server running on port ${PORT}`);
+});
+
 const token = process.env.BOT_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+const adminId = process.env.ADMIN_CHAT_ID;
+
+if (!token) {
+  console.error("❌ BOT_TOKEN missing! Add it in Render Environment Variables.");
+  process.exit(1);
+}
 
 const bot = new TelegramBot(token, { polling: true });
+
 console.log("🤖 Bot is running...");
 
-// Store all user IDs
+// Store user IDs
 const users = new Set();
 
-// Safe message sending to prevent crashes
-const safeSendMessage = (chatId, text) => {
-    bot.sendMessage(chatId, text).catch((err) => {
-        if (err.response && err.response.statusCode === 403) {
-            console.log(`⚠️ Cannot send message to ${chatId}, user blocked the bot or never started it.`);
-        } else {
-            console.error(err);
-        }
-    });
-};
-
-// Listen for messages
+// Handle messages
 bot.on("message", (msg) => {
-    const chatId = msg.chat.id;
-    const userMessage = msg.text;
+  const chatId = msg.chat.id;
+  const text = msg.text;
 
-    // Ignore bot messages
-    if (msg.from.is_bot) return;
+  if (msg.from.is_bot) return;
 
-    // Track users (exclude admin)
-    if (chatId !== parseInt(ADMIN_CHAT_ID)) {
-        users.add(chatId);
-    }
+  // Save users except admin
+  if (chatId != adminId) {
+    users.add(chatId);
+  }
 
-    // Handle /start command
-    if (userMessage === "/start") {
-        safeSendMessage(chatId, "Yaada fi Gorsa Qabduu nuuf kaa'i💡");
-        return;
-    }
+  // Start command
+  if (text === "/start") {
+    bot.sendMessage(chatId, "Yaada keessan nuuf ergaa 💡");
+    return;
+  }
 
-    // Admin broadcasts message to all users
-    if (chatId === parseInt(ADMIN_CHAT_ID)) {
-        users.forEach((userId) => {
-            safeSendMessage(userId, `📢 Admin: ${userMessage}`);
-        });
-        return;
-    }
+  // Admin Broadcasting
+  if (chatId == adminId) {
+    users.forEach((userId) => {
+      bot.sendMessage(userId, `📢 Admin: ${text}`);
+    });
+    return;
+  }
 
-    // Forward idea to admin
-    safeSendMessage(
-        parseInt(ADMIN_CHAT_ID),
-        `💡 Idea from @${msg.from.username || "unknown"}:\n\n${userMessage}`
-    );
-
-    // Confirm to user
-    safeSendMessage(chatId, "Yaadni keessaan Milkaa'inaan Ergamee jira✅");
+  // User idea → forward to admin
+  bot.sendMessage(adminId, `💡 New Idea from user:\n${text}`);
+  bot.sendMessage(chatId, "Yaadni keessan Milkaa’inaan ergamee jira ✅");
 });
