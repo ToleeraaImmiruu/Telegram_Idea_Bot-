@@ -1,56 +1,59 @@
+import express from "express";
+import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
+
 dotenv.config();
 
-import TelegramBot from "node-telegram-bot-api";
-import express from "express";
-
 const app = express();
+app.use(express.json());
 
-// Render port requirement
 const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-  res.send("🚀 Telegram Bot is running on Render!");
-});
-
-app.listen(PORT, () => {
-  console.log(`🌍 Web server running on port ${PORT}`);
-});
-
 const token = process.env.BOT_TOKEN;
 const adminId = process.env.ADMIN_CHAT_ID;
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL; // Required for webhook
 
 if (!token) {
-  console.error("❌ BOT_TOKEN missing! Add it in Render Environment Variables.");
+  console.error("❌ BOT_TOKEN missing!");
   process.exit(1);
 }
 
-const bot = new TelegramBot(token, { polling: true });
+if (!PUBLIC_URL) {
+  console.error("❌ RENDER_EXTERNAL_URL missing!");
+  process.exit(1);
+}
 
-console.log("🤖 Bot is running...");
+// --- Initialize bot using WEBHOOK (NOT polling) ---
+const bot = new TelegramBot(token, { webHook: true });
+bot.setWebHook(`${PUBLIC_URL}/bot${token}`);
 
-// Store user IDs
+console.log("🤖 Webhook bot running...");
+
+// Webhook route
+app.post(`/bot${token}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// --- Logic Starts Here ---
 const users = new Set();
 
-// Handle messages
+// When bot receives a message
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
   if (msg.from.is_bot) return;
 
-  // Save users except admin
-  if (chatId != adminId) {
-    users.add(chatId);
-  }
+  // Save normal users
+  if (chatId != adminId) users.add(chatId);
 
-  // Start command
+  // /start command
   if (text === "/start") {
     bot.sendMessage(chatId, "Yaada keessan nuuf ergaa 💡");
     return;
   }
 
-  // Admin Broadcasting
+  // Admin broadcast
   if (chatId == adminId) {
     users.forEach((userId) => {
       bot.sendMessage(userId, `📢 Admin: ${text}`);
@@ -58,7 +61,12 @@ bot.on("message", (msg) => {
     return;
   }
 
-  // User idea → forward to admin
-  bot.sendMessage(adminId, `💡 New Idea from user:\n${text}`);
+  // Forward idea to admin
+  bot.sendMessage(adminId, `💡 Idea from user:\n${text}`);
   bot.sendMessage(chatId, "Yaadni keessan Milkaa’inaan ergamee jira ✅");
+});
+
+// Start Express
+app.listen(PORT, () => {
+  console.log(`🌍 Server running on port ${PORT}`);
 });
