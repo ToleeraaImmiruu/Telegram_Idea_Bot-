@@ -10,7 +10,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const token = process.env.BOT_TOKEN;
 const adminId = process.env.ADMIN_CHAT_ID;
-const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL; // Required for webhook
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL;
 
 if (!token) {
   console.error("❌ BOT_TOKEN missing!");
@@ -22,7 +22,7 @@ if (!PUBLIC_URL) {
   process.exit(1);
 }
 
-// --- Initialize bot using WEBHOOK (NOT polling) ---
+// --- Initialize bot using WEBHOOK ---
 const bot = new TelegramBot(token, { webHook: true });
 bot.setWebHook(`${PUBLIC_URL}/bot${token}`);
 
@@ -34,17 +34,22 @@ app.post(`/bot${token}`, (req, res) => {
   res.sendStatus(200);
 });
 
-// --- Logic Starts Here ---
+// Store users
 const users = new Set();
 
-// When bot receives a message
+// Handle messages
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
   if (msg.from.is_bot) return;
 
-  // Save normal users
+  // Extract user info
+  const firstName = msg.from.first_name || "";
+  const lastName = msg.from.last_name || "";
+  const username = msg.from.username ? `@${msg.from.username}` : "No username";
+
+  // Save user (not admin)
   if (chatId != adminId) users.add(chatId);
 
   // /start command
@@ -53,7 +58,7 @@ bot.on("message", (msg) => {
     return;
   }
 
-  // Admin broadcast
+  // Admin broadcasts
   if (chatId == adminId) {
     users.forEach((userId) => {
       bot.sendMessage(userId, `📢 Admin: ${text}`);
@@ -61,8 +66,13 @@ bot.on("message", (msg) => {
     return;
   }
 
-  // Forward idea to admin
-  bot.sendMessage(adminId, `💡 Idea from user:\n${text}`);
+  // Forward idea to admin WITH username + name (same as local)
+  bot.sendMessage(
+    adminId,
+    `💡 Idea from:\n👤 Name: ${firstName} ${lastName}\n🔗 Username: ${username}\n\n💬 Message:\n${text}`
+  );
+
+  // Confirm to user
   bot.sendMessage(chatId, "Yaadni keessan Milkaa’inaan ergamee jira ✅");
 });
 
